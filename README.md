@@ -50,8 +50,9 @@ python dev_server.py        # http://localhost:8000  (no dependencies needed)
    (no framework, no build command), and click **Deploy**.
    Or with the CLI: `npm i -g vercel`, then `vercel` (preview) / `vercel --prod` from the repo root.
 
-Vercel serves `public/` as the site and each file in `api/` as a Python serverless function
-(`/api/play`, `/api/ai`). `.vercelignore` keeps desktop-only files out of the deployment.
+Vercel serves `public/` as the site and runs `app.py` (a standard-library WSGI app exposing `app`) as the Python
+function behind `/api/play` and `/api/ai`. There is no `vercel.json` and no build step. `.vercelignore` keeps
+desktop-only files out of the deployment.
 The API is stateless: the browser sends the position with each request and Python decides legality,
 check, game result and the AI's reply. Cold starts add about a second to the first request.
 
@@ -93,11 +94,11 @@ rules, en passant, promotion, mate/stalemate/insufficient-material detection and
 engine.py           # Position, rules, minimax AI (pure Python, no dependencies)
 Chess.py            # desktop pygame UI (imports engine.py)
 webapi.py           # stateless JSON API logic (play / ai) + HTTP glue
-api/play.py, ai.py  # Vercel serverless entry points
+app.py              # WSGI entrypoint for Vercel: /api/play, /api/ai (+ static fallback)
 public/             # website: index.html + piece images
 dev_server.py       # local server mirroring the Vercel layout
 images/             # piece sprites for the desktop app (copy lives in public/images)
 tests/              # unittest suite (perft, rules, AI, API)
 docs/               # architecture and development notes
-vercel.json, .vercelignore, requirements*.txt
+requirements*.txt, .vercelignore
 ```

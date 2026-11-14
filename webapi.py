@@ -134,23 +134,28 @@ ROUTES = {"/api/play": play, "/api/ai": ai}
 
 
 # ------------------------------------------------------------------ HTTP glue
-def serve(handler, fn):
-    """Run `fn(json_body)` for a BaseHTTPRequestHandler instance and write the JSON reply."""
+def run(fn, raw):
+    """Parse a raw JSON request body, run `fn(body)`, and return (status, payload dict)."""
     try:
-        length = int(handler.headers.get("Content-Length") or 0)
-        if length > 1_000_000:
+        if len(raw) > 1_000_000:
             raise ApiError("request too large", 413)
         try:
-            body = json.loads(handler.rfile.read(length) or b"{}")
+            body = json.loads(raw or b"{}")
         except ValueError:
             raise ApiError("body must be JSON")
         if not isinstance(body, dict):
             raise ApiError("body must be a JSON object")
-        status, payload = 200, fn(body)
+        return 200, fn(body)
     except ApiError as e:
-        status, payload = e.status, {"error": str(e)}
+        return e.status, {"error": str(e)}
     except Exception:  # never leak a traceback to the client
-        status, payload = 500, {"error": "internal error"}
+        return 500, {"error": "internal error"}
+
+
+def serve(handler, fn):
+    """http.server adapter (used by dev_server.py): run `fn` for a BaseHTTPRequestHandler instance."""
+    length = int(handler.headers.get("Content-Length") or 0)
+    status, payload = run(fn, handler.rfile.read(min(length, 1_000_001)))
     data = json.dumps(payload).encode()
     handler.send_response(status)
     handler.send_header("Content-Type", "application/json")

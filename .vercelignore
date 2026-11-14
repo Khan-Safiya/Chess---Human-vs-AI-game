@@ -3,6 +3,7 @@ docs
 tests
 images
 Chess.py
+dev_server.py
 requirements-desktop.txt
 __pycache__
 *.pyc

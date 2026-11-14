@@ -5,7 +5,7 @@ The code is split so the rules and AI are shared by two front-ends:
 ```
 engine.py  <--  Chess.py (pygame desktop UI)
     ^
-    +-------  webapi.py  <--  api/play.py, api/ai.py (Vercel)  and  dev_server.py (local)
+    +-------  webapi.py  <--  app.py (WSGI, Vercel)  and  dev_server.py (local)
                                   ^
                            public/index.html (browser UI, calls /api/*)
 ```
@@ -90,5 +90,5 @@ Both return `{position, key, legal_moves, in_check, result, last_move}`. Wire fo
 **Stateless by design** - serverless functions remember nothing, so the browser keeps a stack of the server's responses.
 That stack *is* the undo history (Undo pops one or two entries), and `history` (the list of position keys) lets the server
 count repetitions for the threefold-repetition draw. The browser contains no chess rules: it only draws the board and
-sends clicks. `api/*.py` are thin `BaseHTTPRequestHandler` wrappers (Vercel's Python runtime); `dev_server.py` serves
-the same routes locally.
+sends clicks. `app.py` is the WSGI entrypoint Vercel's Python runtime looks for (a module-level `app`; it also serves `public/` as a
+fallback); `dev_server.py` serves the same routes locally with `http.server`.

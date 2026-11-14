@@ -140,6 +140,42 @@ class HttpLayer(unittest.TestCase):
             self.assertEqual(r.status, 200)
 
 
+class WsgiApp(unittest.TestCase):
+    """app.py is the Vercel entrypoint: call it exactly as a WSGI server would."""
+
+    def call(self, method, path, body=None):
+        import io
+        import app as app_module
+        raw = json.dumps(body).encode() if body is not None else b""
+        environ = {"REQUEST_METHOD": method, "PATH_INFO": path, "CONTENT_LENGTH": str(len(raw)),
+                   "wsgi.input": io.BytesIO(raw)}
+        out = {}
+        chunks = app_module.app(environ, lambda status, headers: out.update(status=status, headers=dict(headers)))
+        return out["status"], out["headers"], b"".join(chunks)
+
+    def test_play_and_ai_routes(self):
+        status, _, data = self.call("POST", "/api/play", {"position": START, "history": []})
+        self.assertEqual(status, "200 OK")
+        self.assertEqual(len(json.loads(data)["legal_moves"]), 20)
+        _, _, data = self.call("POST", "/api/play", {"position": START, "history": [], "move": mv("e2e4")})
+        status, _, data = self.call("POST", "/api/ai", {"position": json.loads(data)["position"], "history": []})
+        self.assertEqual((status, json.loads(data)["position"]["turn"]), ("200 OK", "white"))
+
+    def test_errors(self):
+        self.assertEqual(self.call("GET", "/api/play")[0], "405 Method Not Allowed")
+        self.assertTrue(self.call("POST", "/api/play", {"position": START, "move": mv("e2e5")})[0].startswith("422"))
+        self.assertTrue(self.call("POST", "/api/play", {"nope": 1})[0].startswith("400"))
+
+    def test_static_files_and_traversal(self):
+        status, headers, _ = self.call("GET", "/")
+        self.assertEqual(status, "200 OK")
+        self.assertIn("text/html", headers["Content-Type"])
+        self.assertEqual(self.call("GET", "/images/wK.png")[1]["Content-Type"], "image/png")
+        self.assertTrue(self.call("GET", "/nope.txt")[0].startswith("404"))
+        self.assertTrue(self.call("GET", "/../webapi.py")[0].startswith("404"))
+        self.assertTrue(self.call("GET", "/..%2fwebapi.py")[0].startswith("404"))
+
+
 class HelpInSync(unittest.TestCase):
     """The desktop and web Help screens must describe the same rules."""
 
