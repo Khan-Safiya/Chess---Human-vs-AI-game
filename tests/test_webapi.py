@@ -171,6 +171,8 @@ class WsgiApp(unittest.TestCase):
         self.assertEqual(status, "200 OK")
         self.assertIn("text/html", headers["Content-Type"])
         self.assertEqual(self.call("GET", "/images/wK.png")[1]["Content-Type"], "image/png")
+        self.assertEqual(self.call("GET", "/favicon.png")[1]["Content-Type"], "image/png")
+        self.assertIn(b'rel="icon"', self.call("GET", "/")[2])
         self.assertTrue(self.call("GET", "/nope.txt")[0].startswith("404"))
         self.assertTrue(self.call("GET", "/../webapi.py")[0].startswith("404"))
         self.assertTrue(self.call("GET", "/..%2fwebapi.py")[0].startswith("404"))
