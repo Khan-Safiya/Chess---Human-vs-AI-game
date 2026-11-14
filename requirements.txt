@@ -1,0 +1,2 @@
+# Web deployment (Vercel) needs no third-party packages: the engine and API are pure standard-library Python.
+# Desktop (pygame) dependencies live in requirements-desktop.txt.

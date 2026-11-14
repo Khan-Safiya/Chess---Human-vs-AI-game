@@ -1,0 +1,8 @@
+.venv
+docs
+tests
+images
+Chess.py
+requirements-desktop.txt
+__pycache__
+*.pyc

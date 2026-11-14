@@ -1,0 +1,292 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Chess - Human vs AI</title>
+<style>
+  :root {
+    --light: #eeeed2; --dark: #769656;
+    --last-light: #f6f669; --last-dark: #bbcb2b;
+    --sel: #baca44; --hint-light: #d0dcb2; --hint-dark: #9bb77d;
+    --bg: #f4f4f1; --ink: #1c1c1a; --muted: #666; --btn: #4682b4; --btn-hover: #6495ed;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #1e1f1c; --ink: #ecece8; --muted: #a0a09a; }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; min-height: 100vh; background: var(--bg); color: var(--ink);
+    font: 16px/1.4 system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
+    display: flex; flex-direction: column; align-items: center; padding: 16px;
+  }
+  h1 { font-size: 1.25rem; margin: 0 0 12px; }
+  #wrap { width: min(92vw, 640px); }
+  #board {
+    display: grid; grid-template-columns: repeat(8, 1fr); aspect-ratio: 1; width: 100%;
+    border: 2px solid #333; user-select: none; position: relative;
+  }
+  .sq { position: relative; aspect-ratio: 1; cursor: default; }
+  .sq.light { background: var(--light); } .sq.dark { background: var(--dark); }
+  .sq.last.light { background: var(--last-light); } .sq.last.dark { background: var(--last-dark); }
+  .sq.sel { background: var(--sel) !important; }
+  .sq.hint.light { background: var(--hint-light) !important; } .sq.hint.dark { background: var(--hint-dark) !important; }
+  .sq.mine { cursor: pointer; } .sq.hint { cursor: pointer; }
+  .sq.check { box-shadow: inset 0 0 0 4px #dc4646; }
+  .sq img { width: 100%; height: 100%; display: block; pointer-events: none; }
+  .sq .lbl { position: absolute; font-size: 11px; font-weight: 600; pointer-events: none; }
+  .sq .rank { top: 2px; left: 3px; } .sq .file { bottom: 1px; right: 3px; }
+  .sq.light .lbl { color: var(--dark); } .sq.dark .lbl { color: var(--light); }
+  #bar { display: flex; align-items: center; gap: 8px; margin-top: 12px; flex-wrap: wrap; }
+  #msg { flex: 1 1 200px; min-height: 1.4em; font-weight: 500; }
+  #msg.busy::after { content: ""; display: inline-block; width: 12px; height: 12px; margin-left: 8px;
+    border: 2px solid var(--muted); border-top-color: transparent; border-radius: 50%;
+    animation: spin 0.8s linear infinite; vertical-align: -2px; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  button {
+    background: var(--btn); color: #fff; border: 2px solid #111; padding: 6px 14px; font: inherit; cursor: pointer;
+  }
+  button:hover:not(:disabled) { background: var(--btn-hover); }
+  button:disabled { background: #aaa; cursor: not-allowed; }
+  button:focus-visible { outline: 3px solid #ffbf47; outline-offset: 2px; }
+  dialog { border: 2px solid #333; padding: 16px 20px; max-width: min(92vw, 640px); max-height: 88vh; overflow-y: auto; background: var(--bg); color: var(--ink); }
+  dialog::backdrop { background: rgba(0,0,0,.5); }
+  #promo-choices { display: flex; gap: 6px; margin: 10px 0; }
+  #promo-choices button { padding: 0; width: 72px; height: 72px; background: #c8c8b4; }
+  #promo-choices button:hover { background: var(--light); }
+  #promo-choices img { width: 100%; height: 100%; }
+  #help h2 { margin-top: 0; } #help dt { font-weight: 700; margin-top: 12px; font-size: 1.05rem; } #help dd { margin: 2px 0 0; color: var(--muted); } #help dd.sub { margin-left: 18px; } #help dd.sub b { color: var(--ink); }
+  footer { margin-top: 16px; font-size: .85rem; color: var(--muted); }
+</style>
+</head>
+<body>
+<h1>Chess - Human vs AI</h1>
+<div id="wrap">
+  <div id="board" role="grid" aria-label="Chess board"></div>
+  <div id="bar">
+    <div id="msg" role="status" aria-live="polite">Loading...</div>
+    <button id="undo" disabled>Undo</button>
+    <button id="new">New Game</button>
+    <button id="helpbtn">Help</button>
+  </div>
+</div>
+<footer>You play White. The rules engine and AI run in Python on the server.</footer>
+
+<dialog id="promo">
+  <strong>Promote to:</strong>
+  <div id="promo-choices"></div>
+  <button id="promo-cancel">Cancel</button>
+</dialog>
+
+<dialog id="help">
+  <h2>Chess Rules</h2>
+  <dl>
+    <dt>Objective:</dt>
+    <dd>Checkmate your opponent's king. This happens when the king is in check and cannot escape capture.</dd>
+    <dt>Pieces:</dt>
+    <dd class="sub"><b>Pawn:</b> Moves forward one square (or two from starting). Captures diagonally. Promotes when reaching the other end.</dd>
+    <dd class="sub"><b>Knight:</b> Moves in an L-shape (two squares in one direction, then one square perpendicular). Can jump over pieces.</dd>
+    <dd class="sub"><b>Bishop:</b> Moves diagonally any number of squares. Cannot jump over pieces.</dd>
+    <dd class="sub"><b>Rook:</b> Moves horizontally or vertically any number of squares. Cannot jump over pieces.</dd>
+    <dd class="sub"><b>Queen:</b> Combines the power of the rook and bishop. Most powerful piece.</dd>
+    <dd class="sub"><b>King:</b> Moves one square in any direction. Cannot move into check.</dd>
+    <dt>Special Rules:</dt>
+    <dd class="sub"><b>Check:</b> When your king is threatened with capture. You must get out of check on your next move.</dd>
+    <dd class="sub"><b>Checkmate:</b> When a king is in check and cannot escape. Game over.</dd>
+    <dd class="sub"><b>Stalemate:</b> When a player has no legal moves but their king is not in check. Results in a draw.</dd>
+    <dd class="sub"><b>Draws:</b> Can occur by stalemate, threefold repetition, or insufficient material.</dd>
+    <dd class="sub"><b>Castling:</b> Move the king two squares toward an unmoved rook and the rook hops over it. Not allowed if the king or that rook has already moved, if there are pieces in between, or if the king is in check, passes through an attacked square, or lands on one.</dd>
+    <dd class="sub"><b>En passant:</b> If an enemy pawn has just advanced two squares and lands beside your pawn, you may capture it as if it had moved only one square - but only on the very next move.</dd>
+    <dd class="sub"><b>Promotion:</b> A pawn reaching the far end of the board becomes a queen, rook, bishop or knight - you choose.</dd>
+    <dt>In this game:</dt>
+    <dd>You play as White. Click a piece to select it, then click a highlighted square to move.</dd>
+    <dd>The AI plays as Black and will respond automatically.</dd>
+    <dt>Controls:</dt>
+    <dd>Undo (or U) takes back your last move and the AI's reply. New Game (or R) restarts.</dd>
+  </dl>
+  <button id="help-close">Close</button>
+</dialog>
+
+<script>
+"use strict";
+const $ = (id) => document.getElementById(id);
+const boardEl = $("board"), msgEl = $("msg"), undoBtn = $("undo");
+const PROMO = ["Q", "R", "B", "N"];
+const START = {
+  board: ["rnbqkbnr", "pppppppp", "........", "........", "........", "........", "PPPPPPPP", "RNBQKBNR"],
+  turn: "white", castling: "KQkq", ep: null,
+};
+
+let states = [];        // server descriptions; states[last] is the current position
+let selected = null;    // [row, col]
+let busy = false;       // a request is in flight
+let token = 0;          // bumped on undo/new game to discard stale AI replies
+let message = "";
+
+const cur = () => states[states.length - 1];
+const isWhitePiece = (ch) => ch !== "." && ch === ch.toUpperCase();
+
+async function api(path, body) {
+  const res = await fetch(path, {
+    method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || "Server error (" + res.status + ")");
+  return data;
+}
+
+const historyKeys = () => states.map((s) => s.key);
+
+function statusText(s) {
+  if (s.result) return s.result;
+  if (s.position.turn === "black") return "AI is thinking...";
+  return s.in_check ? "Check! Your move." : "Your turn (White)";
+}
+
+function render() {
+  const s = cur();
+  boardEl.textContent = "";
+  if (!s) return;
+  const rows = s.position.board;
+  const myTurn = s.position.turn === "white" && !s.result && !busy;
+  const targets = new Set();
+  if (selected && myTurn) {
+    for (const m of s.legal_moves) if (m[0] === selected[0] && m[1] === selected[1]) targets.add(m[2] + "," + m[3]);
+  }
+  let checkSq = null;
+  if (s.in_check) {
+    const king = s.position.turn === "white" ? "K" : "k";
+    rows.forEach((r, i) => { const j = r.indexOf(king); if (j >= 0) checkSq = i + "," + j; });
+  }
+  for (let r = 0; r < 8; r++) {
+    for (let c = 0; c < 8; c++) {
+      const id = r + "," + c, ch = rows[r][c];
+      const d = document.createElement("div");
+      d.className = "sq " + ((r + c) % 2 === 0 ? "light" : "dark");
+      const lm = s.last_move;
+      if (lm && ((lm[0] === r && lm[1] === c) || (lm[2] === r && lm[3] === c))) d.classList.add("last");
+      if (selected && selected[0] === r && selected[1] === c) d.classList.add("sel");
+      if (targets.has(id)) d.classList.add("hint");
+      if (checkSq === id) d.classList.add("check");
+      if (myTurn && isWhitePiece(ch)) d.classList.add("mine");
+      if (ch !== ".") {
+        const img = document.createElement("img");
+        img.src = "images/" + (isWhitePiece(ch) ? "w" : "b") + ch.toUpperCase() + ".png";
+        img.alt = (isWhitePiece(ch) ? "White " : "Black ") + ch.toUpperCase();
+        img.draggable = false;
+        d.appendChild(img);
+      }
+      if (c === 0) { const l = document.createElement("span"); l.className = "lbl rank"; l.textContent = 8 - r; d.appendChild(l); }
+      if (r === 7) { const l = document.createElement("span"); l.className = "lbl file"; l.textContent = "abcdefgh"[c]; d.appendChild(l); }
+      d.addEventListener("click", () => onSquare(r, c));
+      boardEl.appendChild(d);
+    }
+  }
+  msgEl.textContent = message;
+  msgEl.classList.toggle("busy", busy);
+  undoBtn.disabled = states.length < 2;
+}
+
+function setMessage(text) { message = text; }
+
+async function onSquare(r, c) {
+  const s = cur();
+  if (!s || busy || s.result || s.position.turn !== "white") return;
+  const ch = s.position.board[r][c];
+  if (selected) {
+    const matches = s.legal_moves.filter((m) => m[0] === selected[0] && m[1] === selected[1] && m[2] === r && m[3] === c);
+    if (matches.length > 1) return askPromotion(matches);
+    if (matches.length === 1) return humanMove(matches[0]);
+  }
+  selected = isWhitePiece(ch) ? [r, c] : null;
+  render();
+}
+
+function askPromotion(matches) {
+  const box = $("promo-choices");
+  box.textContent = "";
+  for (const p of PROMO) {
+    const m = matches.find((x) => x[4] === p);
+    if (!m) continue;
+    const b = document.createElement("button");
+    b.title = p;
+    const img = document.createElement("img");
+    img.src = "images/w" + p + ".png"; img.alt = p;
+    b.appendChild(img);
+    b.addEventListener("click", () => { $("promo").close(); humanMove(m); });
+    box.appendChild(b);
+  }
+  $("promo").showModal();
+}
+$("promo-cancel").addEventListener("click", () => { $("promo").close(); selected = null; render(); });
+
+async function humanMove(move) {
+  const my = token;
+  selected = null; busy = true; setMessage("Moving..."); render();
+  try {
+    const next = await api("/api/play", { position: cur().position, history: historyKeys(), move });
+    if (my !== token) return;
+    states.push(next);
+    setMessage(statusText(next));
+    busy = false; render();
+    await aiTurn();
+  } catch (e) {
+    if (my !== token) return;
+    busy = false; setMessage("Error: " + e.message); render();
+  }
+}
+
+async function aiTurn() {
+  const my = token, s = cur();
+  if (s.result || s.position.turn !== "black") return;
+  busy = true; setMessage("AI is thinking..."); render();
+  try {
+    const next = await api("/api/ai", { position: s.position, history: historyKeys() });
+    if (my !== token) return;
+    states.push(next);
+    setMessage(next.result || ("AI moved: " + next.move_text + (next.in_check ? " - Check!" : "")));
+  } catch (e) {
+    if (my !== token) return;
+    setMessage("Error: " + e.message + " (press Undo to retry)");
+  }
+  busy = false; render();
+}
+
+function undo() {
+  if (states.length < 2) return;
+  token++; busy = false; selected = null;
+  states.pop();
+  if (states.length > 1 && cur().position.turn === "black") states.pop();
+  setMessage("Move undone. " + statusText(cur()));
+  render();
+}
+
+async function newGame() {
+  const my = ++token;
+  busy = true; selected = null; states = []; setMessage("Starting..."); render();
+  try {
+    const first = await api("/api/play", { position: START, history: [] });
+    if (my !== token) return;
+    states = [first];
+    setMessage(statusText(first));
+  } catch (e) {
+    if (my !== token) return;
+    setMessage("Error: " + e.message + " - click New Game to retry");
+  }
+  busy = false; render();
+}
+
+$("undo").addEventListener("click", undo);
+$("new").addEventListener("click", newGame);
+$("helpbtn").addEventListener("click", () => $("help").showModal());
+$("help-close").addEventListener("click", () => $("help").close());
+document.addEventListener("keydown", (e) => {
+  if (document.querySelector("dialog[open]")) return;
+  if (e.key === "u" || e.key === "U") undo();
+  else if (e.key === "r" || e.key === "R") newGame();
+});
+
+newGame();
+</script>
+</body>
+</html>
