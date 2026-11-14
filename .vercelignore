@@ -1,9 +1,11 @@
-.venv
-docs
-tests
-images
-Chess.py
-dev_server.py
-requirements-desktop.txt
+# Patterns start with "/" so they match only at the repo root.
+# (A bare "images" would also exclude public/images, which the website needs.)
+/.venv
+/docs
+/tests
+/images
+/Chess.py
+/dev_server.py
+/requirements-desktop.txt
 __pycache__
 *.pyc
